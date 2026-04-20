@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Any
 import json
 import requests
 import sys
+import os
 
     
 
@@ -47,8 +48,11 @@ def _get_fb_access_token() -> str:
                 print(f"Using Facebook token from command line arguments")
             else:
                 raise Exception("--fb-token argument provided but no token value followed it")
+        elif os.environ.get("FB_TOKEN"):
+            FB_ACCESS_TOKEN = os.environ.get("FB_TOKEN")
+            print("Using Facebook token from FB_TOKEN environment variable")
         else:
-            raise Exception("Facebook token must be provided via '--fb-token' command line argument")
+            raise Exception("Facebook token must be provided via '--fb-token' argument or FB_TOKEN env var")
 
     return FB_ACCESS_TOKEN
 
@@ -2293,5 +2297,10 @@ def get_activities_by_adset(
 
 if __name__ == "__main__":
     _get_fb_access_token()
-    mcp.run(transport='stdio')
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    if transport == "sse":
+        port = int(os.environ.get("PORT", 8080))
+        mcp.run(transport="sse", host="0.0.0.0", port=port)
+    else:
+        mcp.run(transport="stdio")
     
