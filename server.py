@@ -2300,9 +2300,22 @@ if __name__ == "__main__":
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     if transport == "sse":
         import uvicorn
+        from starlette.applications import Starlette
+        from starlette.routing import Mount, Route
+        from starlette.responses import JSONResponse
+
         port = int(os.environ.get("PORT", 8080))
-        app = mcp.sse_app()
-        uvicorn.run(app, host="0.0.0.0", port=port, proxy_headers=True, forwarded_allow_ips="*")
+        sse_application = mcp.sse_app()
+
+        async def health(request):
+            return JSONResponse({"status": "ok", "service": "meta-ads-mcp"})
+
+        combined_app = Starlette(routes=[
+            Route("/health", endpoint=health),
+            Mount("/", app=sse_application),
+        ])
+
+        uvicorn.run(combined_app, host="0.0.0.0", port=port, proxy_headers=True, forwarded_allow_ips="*")
     else:
         mcp.run(transport="stdio")
     
