@@ -2305,15 +2305,24 @@ if __name__ == "__main__":
         from starlette.responses import JSONResponse
 
         port = int(os.environ.get("PORT", 8080))
-        sse_application = mcp.sse_app()
 
         async def health(request):
             return JSONResponse({"status": "ok", "service": "meta-ads-mcp"})
 
-        combined_app = Starlette(routes=[
-            Route("/health", endpoint=health),
-            Mount("/", app=sse_application),
-        ])
+        # Tenta streamable HTTP primeiro (mais compatível com proxies/CDN)
+        # Fallback para SSE se não disponível
+        try:
+            http_app = mcp.streamable_http_app()
+            combined_app = Starlette(routes=[
+                Route("/health", endpoint=health),
+                Mount("/", app=http_app),
+            ])
+        except AttributeError:
+            sse_application = mcp.sse_app()
+            combined_app = Starlette(routes=[
+                Route("/health", endpoint=health),
+                Mount("/", app=sse_application),
+            ])
 
         uvicorn.run(combined_app, host="0.0.0.0", port=port, proxy_headers=True, forwarded_allow_ips="*")
     else:
