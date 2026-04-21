@@ -2299,32 +2299,42 @@ if __name__ == "__main__":
     _get_fb_access_token()
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     if transport == "sse":
+        import anyio
         import uvicorn
+        from contextlib import asynccontextmanager
         from starlette.applications import Starlette
-        from starlette.routing import Mount, Route
+        from starlette.routing import Route
         from starlette.responses import JSONResponse
+        from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
         port = int(os.environ.get("PORT", 8080))
+
+        session_manager = StreamableHTTPSessionManager(
+            app=mcp._mcp_server,
+            event_store=None,
+            json_response=False,
+        )
+
+        @asynccontextmanager
+        async def lifespan(app):
+            async with session_manager.run():
+                yield
 
         async def health(request):
             return JSONResponse({"status": "ok", "service": "meta-ads-mcp"})
 
-        # Tenta streamable HTTP primeiro (mais compatível com proxies/CDN)
-        # Fallback para SSE se não disponível
-        try:
-            http_app = mcp.streamable_http_app()
-            combined_app = Starlette(routes=[
-                Route("/health", endpoint=health),
-                Mount("/", app=http_app),
-            ])
-        except AttributeError:
-            sse_application = mcp.sse_app()
-            combined_app = Starlette(routes=[
-                Route("/health", endpoint=health),
-                Mount("/", app=sse_application),
-            ])
+        async def handle_mcp(scope, receive, send):
+            await session_manager.handle_request(scope, receive, send)
 
-        uvicorn.run(combined_app, host="0.0.0.0", port=port, proxy_headers=True, forwarded_allow_ips="*")
+        app = Starlette(
+            lifespan=lifespan,
+            routes=[
+                Route("/health", endpoint=health),
+                Route("/mcp", endpoint=handle_mcp, methods=["GET", "POST", "DELETE"]),
+            ],
+        )
+
+        uvicorn.run(app, host="0.0.0.0", port=port, proxy_headers=True, forwarded_allow_ips="*")
     else:
         mcp.run(transport="stdio")
     
