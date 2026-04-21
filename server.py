@@ -2323,8 +2323,8 @@ if __name__ == "__main__":
         async def health(request):
             return JSONResponse({"status": "ok", "service": "meta-ads-mcp"})
 
-        async def handle_mcp(scope, receive, send):
-            await session_manager.handle_request(scope, receive, send)
+        async def handle_mcp(request):
+            await session_manager.handle_request(request.scope, request.receive, request._send)
 
         app = Starlette(
             lifespan=lifespan,
