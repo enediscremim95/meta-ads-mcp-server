@@ -2299,8 +2299,10 @@ if __name__ == "__main__":
     _get_fb_access_token()
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     if transport == "sse":
+        import uvicorn
         port = int(os.environ.get("PORT", 8080))
-        mcp.run(transport="sse", host="0.0.0.0", port=port)
+        app = mcp.sse_app()
+        uvicorn.run(app, host="0.0.0.0", port=port)
     else:
         mcp.run(transport="stdio")
     
